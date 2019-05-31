@@ -18,3 +18,4 @@ example：
 ![Image text](https://github.com/Ela-Boska/Computer_Graphic/blob/master/pic/cubic8.png)
 ![Image text](https://github.com/Ela-Boska/Computer_Graphic/blob/master/pic/cubic9.png)
 ![Image text](https://github.com/Ela-Boska/Computer_Graphic/blob/master/pic/cubic10.png)
+图形中我对轮廓的处理是全部画成白色
