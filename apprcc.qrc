@@ -1,0 +1,5 @@
+<rcc version="1.0">
+    <qresource prefix="pic">
+    <file>miku.png</file>
+    </qresource>
+</rcc>
