@@ -33,21 +33,27 @@ class line_3d():
 
 class plane_3d():
 
-    def __init__(self, vertices, color):
+    def __init__(self, vertices, ka,kd,ks):
         for i in range(len(vertices)):
             ans = np.ones([4,1], dtype='float')
             ans[0:3,0] = vertices[i]
             vertices[i] = ans
         self.vertices = vertices
-        self.color = np.array(color,dtype='float')
-        
+        self.ka = np.array(ka,dtype='float')
+        self.kd = np.array(kd,dtype='float')
+        self.ks = np.array(ks,dtype='float')
         
     def form(self):
         p0 = self.vertices[1][0:3]
-        dp1 = self.vertices[0][0:3] - self.vertices[1][0:3]
-        dp2 = self.vertices[2][0:3] - self.vertices[1][0:3]
+        dp1 = self.vertices[1][0:3] - self.vertices[0][0:3]
+        dp2 = self.vertices[2][0:3] - self.vertices[0][0:3]
         self.a, self.b, self.c = np.cross(dp1[:,0],dp2[:,0])
         self.d = -p0.T.dot(np.cross(dp1[:,0],dp2[:,0]))
+        abs_N = (self.a**2+self.b**2+self.c**2)**0.5
+        self.a /= abs_N
+        self.b /= abs_N
+        self.c /= abs_N
+        self.d /= abs_N
         self.lines = []
         vertices = self.projected_vertices
         for i in range(len(vertices)):
@@ -75,10 +81,16 @@ class plane_3d():
             if vertex[0] > self.xmax:
                 self.xmax = vertex[0]
 
-    def draw(self, d, img, depth):
-
+    def draw(self, d, img, depth,parameters):
+        
         self.project(d)
         self.form()
+        Ika,Ikd,Iks,KL,n=parameters
+        KN = np.array([self.a,self.b,self.c])
+        cos_0 = KL.dot(KN.T).clip(min=0)
+        if cos_0:
+            KR = 2*cos_0*KN - KL
+
         points = {}
         for i in range(len(self.lines)):
             points = self.lines[i].get_points(points)
@@ -93,10 +105,23 @@ class plane_3d():
                 x_2 = 0
             if x_1==x_2:
                 continue
-            axby = self.a*np.arange(x_1,x_2)+self.b*y
-            z = (-self.d-axby)/(self.c+axby/d)
-            u = z<depth[x_1:x_2,y]
-            img[x_1:x_2,y] = u.reshape(-1,1)*self.color.reshape(1,-1)+(1-u).reshape(-1,1)*img[x_1:x_2,y]
+            x = np.arange(x_1,x_2)
+            axby = self.a*x+self.b*y
+            z = (self.d+axby)/(-self.c+axby/d)
+            u = z>depth[x_1:x_2,y]
+            depth[x_1:x_2,y][u] = z[u]
+            if cos_0:
+                KV = np.zeros([x_2-x_1,3])
+                KV[:,0] = x
+                KV[:,1] = y
+                KV[:,2] = d
+                abs_KV = (np.sum(KV**2,1)**0.5).reshape(-1,1)
+                KV /= abs_KV
+                cos_2 = (KV.dot(KR).clip(min=0))**n
+            else:
+                cos_2= np.zeros([1,1])
+            color = (self.ka*Ika+self.kd*Ikd*cos_0).reshape(-1,3)+(self.ks*Iks).reshape(1,3)*cos_2.reshape(-1,1)
+            img[x_1:x_2,y] = u.reshape(-1,1)*color+(1-u).reshape(-1,1)*img[x_1:x_2,y]
 
         return img
 
@@ -113,7 +138,7 @@ class body_3d():
         for i in range(len(self.planes)):
             self.planes[i].exeucute(Matrix)
 
-    def draw(self, d, img, depth,MSAA=0):
+    def draw(self, d, img, depth,parameters,MSAA):
         if MSAA:
             M = scale(3)
             M_ = scale(1/3)
@@ -122,8 +147,8 @@ class body_3d():
             depth = extend(depth,3)
             for i in range(len(self.planes)):
                 self.planes[i].exeucute(M)
-            for plane in self.planes:
-                plane.draw(d*3, img, depth)
+            for i,plane in enumerate(self.planes):
+                plane.draw(d*3, img, depth,parameters)
             for i in range(len(self.planes)):
                 self.planes[i].exeucute(M_)
             Filters = np.array([[1,2,1],[2,4,2],[1,2,1]],dtype='float').reshape(3,3,1,1,1)/16
@@ -131,8 +156,8 @@ class body_3d():
             img = (Filters*img).sum(0).sum(0).astype('int')
             return img
         else:
-            for plane in self.planes:
-                plane.draw(d, img, depth)
+            for i,plane in enumerate(self.planes):
+                plane.draw(d, img, depth,parameters)
             return img
 
         
@@ -143,7 +168,7 @@ def scale(alpha):
 
 def project(d):
     ans = np.eye(4, dtype='float')
-    ans[3,2] = 1/d
+    ans[3,2] = -1/d
     ans[2,2] = 0
     return ans
         
