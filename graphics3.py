@@ -22,11 +22,12 @@ class line_3d():
             self._k = np.inf
         
 
-    def get_points(self):
+    def get_points(self,points):
         flag = self.flag
-        points = np.zeros([int(self.points[1-flag][1])-int(self.points[flag][1]),2],dtype='int')
-        points[:,1] = np.arange(int(self.points[flag][1]),int(self.points[1-flag][1])).astype('int')
-        points[:,0] = np.linspace(self.points[flag][0],self.points[1-flag][0],len(points)+1).astype('int')[:-1]
+        ys = np.arange(int(self.points[flag][1]),int(self.points[1-flag][1]))
+        xs = np.linspace(self.points[flag][0],self.points[1-flag][0],len(ys)+1).astype('int')[:-1]
+        for i in range(len(ys)):
+            points[ys[i]] = points.get(ys[i],[]) + [xs[i]]
         #print(points)
         return points
 
@@ -78,39 +79,24 @@ class plane_3d():
 
         self.project(d)
         self.form()
-        points = np.zeros([0,2],dtype='int')
+        points = {}
         for i in range(len(self.lines)):
-            
-            points = np.concatenate([points,self.lines[i].get_points()],0)
-        labels = np.zeros(img.shape[0:2])
-        for point in points:
-            labels[point[0],point[1]] += 1
+            points = self.lines[i].get_points(points)
+        for key in points:
+            points[key].sort()
 
         for y in range(int(self.ymin), int(self.ymax)):
-            S = 0
-            for x in np.arange(int(self.xmin), int(self.xmax)):
-                if labels[x,y] == 1 and S == 0:
-                    S = 1
-                    axby = self.a*x + self.b*y
-                    z = (-self.d-axby)/(self.c+axby/d)
-                    if z < depth[x,y]:
-                        depth[x,y] = z
-                        img[x,y] = 255
-                elif labels[x,y] == 1 and S == 1:
-                    S = 0
-                    axby += self.a
-                    z = (-self.d-axby)/(self.c+axby/d)
-                    if z < depth[x,y]:
-                        depth[x,y] = z
-                        img[x,y] = 255
-                elif S == 1:
-                    axby += self.a
-                    z = (-self.d-axby)/(self.c+axby/d)
-                    if z<depth[x,y]:
-                        img[x,y,:] = self.color
-                        depth[x,y] = z
-                    if labels[x,y] == 1:
-                        S = 0
+            x_1,x_2 = points[y]
+            if x_1<0:
+                x_1 = 0
+            if x_2<0:
+                x_2 = 0
+            if x_1==x_2:
+                continue
+            axby = self.a*np.arange(x_1,x_2)+self.b*y
+            z = (-self.d-axby)/(self.c+axby/d)
+            u = z<depth[x_1:x_2,y]
+            img[x_1:x_2,y] = u.reshape(-1,1)*self.color.reshape(1,-1)+(1-u).reshape(-1,1)*img[x_1:x_2,y]
 
         return img
 
@@ -136,15 +122,18 @@ class body_3d():
             depth = extend(depth,3)
             for i in range(len(self.planes)):
                 self.planes[i].exeucute(M)
-        for plane in self.planes:
-            plane.draw(d*3, img, depth)
-        if MSAA:
+            for plane in self.planes:
+                plane.draw(d*3, img, depth)
             for i in range(len(self.planes)):
                 self.planes[i].exeucute(M_)
             Filters = np.array([[1,2,1],[2,4,2],[1,2,1]],dtype='float').reshape(3,3,1,1,1)/16
             img = img.reshape(X,3,Y,3,3).transpose(1,3,0,2,4).astype('float')
             img = (Filters*img).sum(0).sum(0).astype('int')
-        return img
+            return img
+        else:
+            for plane in self.planes:
+                plane.draw(d, img, depth)
+            return img
 
         
 def scale(alpha):
