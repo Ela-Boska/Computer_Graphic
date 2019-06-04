@@ -12,7 +12,7 @@ body = body_3d([d,b,c,f,a,e])
 #M = rotate([0,1,1],np.pi/2)
 M_scale = scale(2.)
 M = move([-200,-200,-200])
-M = rotate([1,1,1],np.pi/20).dot(M)
+M = rotate([1,1,1],np.pi/10).dot(M)
 M = move([200,200,200]).dot(M)
 
 plt.ion()
